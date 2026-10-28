@@ -1,7 +1,17 @@
 
-import { defineEventHandler, readBody, createError } from "h3";
+import {
+  defineEventHandler,
+  readBody,
+  createError,
+  setCookie,
+} from "h3";
 import { db } from "../utils/db";
-import { verifyPassword, isAllowedHostwareEmail } from "../utils/auth";
+import {
+  verifyPassword,
+  isAllowedHostwareEmail,
+  createAdminSession,
+  SESSION_COOKIE,
+} from "../utils/auth";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -13,13 +23,11 @@ export default defineEventHandler(async (event) => {
     typeof body?.email === "string"
       ? body.email.trim().toLowerCase()
       : "";
-      const password =
+
+  const password =
     typeof body?.password === "string" ? body.password : "";
 
-  if (
-    !isAllowedHostwareEmail(email) ||
-    password.length === 0
-  ) {
+  if (!isAllowedHostwareEmail(email) || password.length === 0) {
     throw createError({
       statusCode: 401,
       statusMessage: "Adresse e-mail ou mot de passe incorrect.",
@@ -47,10 +55,19 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  // La session sécurisée sera ajoutée à l'étape suivante.
+  const session = await createAdminSession(admin.id);
+
+  setCookie(event, SESSION_COOKIE, session.token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: session.expiresAt,
+  });
+
   return {
     success: true,
-    message: "Identifiants valides. La session n'est pas encore configurée.",
+    message: "Connexion réussie.",
     admin: {
       id: admin.id,
       username: admin.username,
